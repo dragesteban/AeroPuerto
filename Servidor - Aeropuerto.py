@@ -1,86 +1,98 @@
-import mysql.connector
-from mysql.connector import Error
-from mysql.connector import errorcode
 import socket
+import pymysql.cursors
 
+#   Usando PyMySQL
 
-def main():
+contraseña = "Dragon"
+Db = "aeropuerto"
+Port = 50000
+Host = 'localhost'
 
-    IP = "10.20.150.122"
-    PORT = 1234
+conexion = pymysql.connect(host="localhost",
+                           user="root",
+                           passwd=contraseña)
 
-    based = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            passwd="Dragon",
-            database="aeropuerto")
-    
-    micursor = based.cursor()
-    # micursor.execute("CREATE DATABASE aeropuerto")
+cursor = conexion.cursor()
 
-    micursor.execute("DROP TABLE IF EXISTS clientes")
+try:
+    cursor.execute("CREATE DATABASE Prueba;")
+    print("\nCreando...")
+    print("\nSe creo satisfactoriamente la DB Prueba")
+    conexion.commit()
+except:
+    print("\nYa Fue Creada En Otra Ocación la DB Prueba")
+cursor.close()
+conexion.close()
 
-    micursor.execute("CREATE TABLE clientes(Nombre VARCHAR(100), Cedula INT(10) PRIMARY KEY,\
-        Origen VARCHAR(100), Destino VARCHAR(100), Hora VARCHAR(5),\
-        Fecha VARCHAR(10), Aerolinea VARCHAR(50), Costo INT(10))")
-    
-    micursor.close()
-    based.close()
+conexion = pymysql.connect(host="localhost",
+                           user="root",
+                           passwd=contraseña,
+                           database=Db)
+try:
+    CrearTabla = "CREATE TABLE VuelosClientes (Id int NOT NULL AUTO_INCREMENT,\
+    Nombre varchar(50), Cedula int(10) NOT NULL,Origen varchar(30),\
+    Destino varchar(30),Hora varchar(5),Fecha DATE,Aerolinea varchar(15),\
+    Precio float(8),PRIMARY KEY (Id));"
+    cursor = conexion.cursor()
+    cursor.execute(CrearTabla)
+    conexion.commit()
 
-    op = 0
+except:
+    print("Ya esta Creada La Tabla VuelosClientes")
 
-    while op != 6:
+#   Socket
 
-        print("1. Registrar cliente")
-        print("2. Listar tabla")
-        print("3. Consultar por origen")
-        print("4. Consultar por origen")
-        print("5. Retirar un cliente")
-        print("6. Termina")
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((Host, Port))
 
-        op = int(input("Digite opcion: "))
+s.listen(1)
 
-        if op is 1:
-            based = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                passwd="Dragon",
-                database="aeropuerto")
+conn, addr = s.accept()
 
-            micursor = based.cursor()
+while 1:
+    datos = conn.recv(1024)
+    desencrip = datos.decode("utf-8")
 
-            print("Inserte un cliente")
-            ced = int(input("Cedula: "))
+    #   Separar Por comas
+    datosS = desencrip.split(", ")
+    print(datosS)
 
-            # chequea si el estudiante ya existe...
-            sql_select1 = "select * from clientes\
-                    where cedula=%s"
-            # tupla con 1 elemento
-            micursor.execute(sql_select1, (ced,))
-            micursor.fetchone()
-            if micursor.rowcount > 0:
-                print("Ya existe el cliente con la cedula: " + str(ced))
-                micursor.close()
-                based.close()
-            else:
-                nom = input("Nombre: ")
-                ori = input("Origen: ")
-                des = input("Destino: ")
-                hor = input("Hora: ")
-                fec = input("Fecha: ")
-                aer = input("Aerolinea: ")
-                cos = int(input("Costo: "))
+    #   llenar tabla sql
 
-                sqlIn = "insert into clientes(\
-                    Nombre,Cedula,Origen,Destino,Hora,Fecha,Aerolinea,Costo) \
-                    values(%s,%s,%s,%s,%s,%s,%s,%s)"
-                micursor.execute(sqlIn, (nom, ced, ori, des, hor, fec, aer, cos))
-                based.commit()
-                micursor.close()
-                based.close()
+    nom = datosS[0]
+    ced = datosS[1]
+    ori = datosS[2]
+    des = datosS[3]
+    hor = datosS[4]
+    fec = datosS[5]
+    aer = datosS[6]
+    cos = datosS[7]
 
-                print("Insertado registro")
+    sqlIn = "insert into VuelosClientes(\
+        Nombre,Cedula,Origen,Destino,Hora,Fecha,Aerolinea,Precio) \
+        values(%s,%s,%s,%s,%s,%s,%s,%s)"
+    cursor.execute(sqlIn, (nom, ced, ori, des, hor, fec, aer, cos))
+    conexion.commit()
+    cursor.close()
+    conexion.close()
 
+    if not datos:
+        break
 
-if __name__ == "__main__":
-    main()
+    try:
+        mensajeS = ""
+        mensajeSal = "Se pudo Guardar los datos en la DB"
+        for i in range(len(datosS)):
+            mensajeS += datosS[i]
+        conn.sendall(mensajeSal.encode())
+    except:
+        mensajeS = "Error en la capa 8"
+        conn.sendall(mensajeS.encode())
+
+#   Cierro el servidor
+conn.close()
+s.close()
+
+#   Cierro la conexion interna de la DB
+conexion.close()
+cursor.close()
